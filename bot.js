@@ -1,38 +1,31 @@
 const bedrock = require('bedrock-protocol');
 
 function createMinecraftBot(host, port, username) {
-  console.log(`[CONNECTING] IP: ${host}:${port} as ${username}`);
+  console.log(`[START] Trying to join ${host}:${port} as ${username}...`);
 
-  try {
-    const client = bedrock.createClient({
-      host: host || 'Poboi6-wLtc.aternos.me',
-      port: parseInt(port) || 55978,
-      username: username || 'emi_khatana',
-      offline: true,
-      // Bedrock protocol mate skip ping option add karyo
-      skipPing: true
-    });
+  const client = bedrock.createClient({
+    host: host || 'Poboi6-wLtc.aternos.me',
+    port: parseInt(port) || 55978,
+    username: username || 'emi_khatana',
+    offline: true,
+    // Tamaro Aternos Minecraft Bedrock Version (e.g. '1.21.0' કે '1.20.80')
+    version: '1.21.0', 
+    skipPing: true
+  });
 
-    client.on('spawn', () => {
-      console.log(`[SUCCESS] ${username} successfully spawned in Aternos!`);
-    });
+  client.on('spawn', () => {
+    console.log(`[SUCCESS] Bot ${username} is inside the world!`);
+  });
 
-    client.on('join', () => {
-      console.log(`[JOINED] Handshake success! Joining world...`);
-    });
+  client.on('error', (err) => {
+    console.log(`[ERROR] Connection failed:`, err.message);
+  });
 
-    client.on('close', (reason) => {
-      console.log(`[DISCONNECTED] Reason:`, reason);
-    });
+  client.on('close', (reason) => {
+    console.log(`[DISCONNECT] Reason:`, reason);
+  });
 
-    client.on('error', (err) => {
-      console.error(`[BOT ERROR]`, err.message || err);
-    });
-
-    return client;
-  } catch (err) {
-    console.error(`[CREATION ERROR]`, err);
-  }
+  return client;
 }
 
 module.exports = { createMinecraftBot };
