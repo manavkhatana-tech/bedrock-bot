@@ -3,25 +3,12 @@ const Groq = require('groq-sdk');
 
 const groq = process.env.GROQ_API_KEY ? new Groq({ apiKey: process.env.GROQ_API_KEY }) : null;
 
-// Bot State & Intelligence Management
-let bot = {
-  client: null,
-  entityId: null,
-  pos: { x: 0, y: 0, z: 0, yaw: 0, pitch: 0 },
-  targetPlayer: null,
-  health: 20,
-  isHurt: false,
-  isAttacking: false
-};
+const SYSTEM_PROMPT = `You are 'emi_khatana', a cute AI inside Minecraft. Respond in short Gujlish (Roman Gujarati + English, max 8 words). No symbols. Example: "Arey ha brother hu maja ma chu!"`;
 
-const SYSTEM_PROMPT = `You are 'emi_khatana', a smart AI companion inside Minecraft.
-Speak short (max 8 words) in natural Gujlish (Roman Gujarati + English).
-Example: "Arey zombie avyo, hu ene maru chu!", "Arey ha brother hu tari pachal chu!"`;
-
-// AI Reply Generator
 async function getAIReply(userMessage, sender) {
   try {
-    if (!groq) return "Ha brother, hu tari sathe chu!";
+    if (!groq) return "Ha hu ahi chu!";
+
     const res = await groq.chat.completions.create({
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
@@ -31,30 +18,18 @@ async function getAIReply(userMessage, sender) {
       max_tokens: 30,
       temperature: 0.7,
     });
-    return res.choices[0]?.message?.content || "Ha bro!";
+
+    return res.choices[0]?.message?.content || "Ha kem cho bro!";
   } catch (err) {
-    return "Arey ha brother!";
+    console.error("Groq Error:", err.message);
+    return "Ha brother!";
   }
 }
 
-// Send Text via /say so reply ALWAYS appears in chat
-function sendWorldChat(msg) {
-  if (!bot.client) return;
-  const cleanMsg = String(msg).replace(/[^a-zA-Z0-9 !?]/g, '').trim();
-  if (!cleanMsg) return;
-
-  bot.client.queue('command_request', {
-    command: `/say ${cleanMsg}`,
-    origin: { type: 0, uuid: '', request_id: '', player_entity_id: 0n },
-    internal: false,
-    version: 66
-  });
-}
-
 function startBot() {
-  console.log("Starting Active AI Companion emi_khatana...");
+  console.log("Connecting emi_khatana (Universal Chat Protocol)...");
 
-  bot.client = bedrock.createClient({
+  const client = bedrock.createClient({
     host: 'Poboi6-wLtc.aternos.me',
     port: 55978,
     username: 'emi_khatana',
@@ -62,89 +37,52 @@ function startBot() {
     skipPing: true
   });
 
-  bot.client.on('spawn', () => {
-    console.log("SUCCESS: emi_khatana active in server!");
+  client.on('spawn', () => {
+    console.log("SUCCESS: emi_khatana spawned successfully!");
   });
 
-  // Track Positions (Player + Bot) for Gravity & Follow
-  bot.client.on('move_player', (packet) => {
-    if (packet.runtime_entity_id === bot.client.entityId) {
-      bot.pos = packet.position;
-    } else {
-      // Track nearby player position
-      bot.targetPlayer = packet.position;
-    }
-  });
-
-  // Health & Hurt System (Hit by Mob/Player Detection)
-  bot.client.on('entity_event', (packet) => {
-    if (packet.event_id === 'hurt') {
-      bot.isHurt = true;
-      bot.health -= 2;
-      sendWorldChat("Aauu! Mane koike maryo, hu badlo lais!");
-      
-      // Counter Attack Packet
-      bot.client.queue('inventory_transaction', {
-        transaction_type: 'item_use_on_entity',
-        action_type: 1, // Attack
-        entity_runtime_id: packet.runtime_entity_id
-      });
-    }
-  });
-
-  // Text Chat Listener
-  bot.client.on('text', async (packet) => {
+  // Universal Packet Sniffer (Catching all message types)
+  client.on('packet', async (deserialized) => {
     try {
-      const sender = packet.source_name || packet.paramaters?.[0] || '';
-      const message = packet.message || packet.paramaters?.[1] || '';
+      const name = deserialized.data?.name;
 
-      if (!sender || sender.includes('emi_khatana') || sender.includes('Server')) return;
+      if (name === 'text') {
+        const p = deserialized.data.params;
+        console.log("[PACKET DETECTED]:", JSON.stringify(p));
 
-      console.log(`[INCOMING CHAT] ${sender}: ${message}`);
+        let sender = p.source_name || (p.parameters ? p.parameters[0] : '');
+        let message = p.message || (p.parameters ? p.parameters[1] : '');
 
-      const aiReply = await getAIReply(message, sender);
-      sendWorldChat(aiReply);
+        // If message is in raw format
+        if (!message && p.message) message = p.message;
 
+        if (!message || sender.includes('emi_khatana') || sender.includes('Server')) return;
+
+        console.log(`[USER CHAT]: ${sender} -> ${message}`);
+
+        const aiReply = await getAIReply(message, sender);
+        const cleanReply = String(aiReply).replace(/[^a-zA-Z0-9 ]/g, '').trim();
+
+        if (!cleanReply) return;
+
+        console.log(`[BOT REPLYING]: ${cleanReply}`);
+
+        // Send response back using command_request
+        client.queue('command_request', {
+          command: `/say ${cleanReply}`,
+          origin: { type: 0, uuid: '', request_id: '', player_entity_id: 0n },
+          internal: false,
+          version: 66
+        });
+      }
     } catch (err) {
-      console.log("Chat Error:", err.message);
+      console.log("Packet Read Error:", err.message);
     }
   });
 
-  // Main Movement & Physics Loop (Run Every 200ms)
-  setInterval(() => {
-    if (!bot.client || !bot.targetPlayer) return;
-
-    let dx = bot.targetPlayer.x - bot.pos.x;
-    let dz = bot.targetPlayer.z - bot.pos.z;
-    let dist = Math.sqrt(dx * dx + dz * dz);
-
-    // Follow distance condition (જો 3 બ્લોકથી દૂર હોય તો જ ચાલે)
-    if (dist > 3.0 && dist < 20.0) {
-      let speed = 0.2;
-      bot.pos.x += (dx / dist) * speed;
-      bot.pos.z += (dz / dist) * speed;
-      
-      // Calculate Yaw Angle to look towards player
-      bot.pos.yaw = (Math.atan2(dz, dx) * (180 / Math.PI)) - 90;
-
-      // Sync Movement with Server
-      bot.client.queue('player_auth_input', {
-        pitch: 0,
-        yaw: bot.pos.yaw,
-        position: { x: bot.pos.x, y: bot.pos.y, z: bot.pos.z },
-        move_vector: { x: (dx / dist) * speed, z: (dz / dist) * speed },
-        head_yaw: bot.pos.yaw,
-        input_data: 0n,
-        input_mode: 'touch',
-        play_mode: 'normal',
-        interaction_model: 'touch'
-      });
-    }
-  }, 200);
-
-  bot.client.on('error', (err) => console.log("Bot Error:", err.message));
-  bot.client.on('close', () => {
-    console.log("Reconnecting in 10s...");
+  client.on('error', (err) => console.log("Bot Error:", err.message));
+  client.on('close', () => {
+    console.log("Disconnected. Reconnecting in 10s...");
     setTimeout(startBot, 10000);
   });
 }
