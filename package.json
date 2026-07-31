@@ -1,7 +1,6 @@
 {
   "name": "minecraft-ai-bot",
   "version": "1.0.0",
-  "description": "Mineflayer AI Bot for Aternos Server",
   "main": "bot.js",
   "scripts": {
     "start": "node bot.js"
