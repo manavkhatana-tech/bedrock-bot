@@ -27,31 +27,30 @@ async function getAIReply(userMessage, sender) {
 }
 
 function startBot() {
-  console.log("Starting Safe-Protocol Bot emi_khatana...");
+  console.log("Starting emi_khatana Dynamic Bot...");
 
   const client = bedrock.createClient({
     host: 'Poboi6-wLtc.aternos.me',
     port: 55978,
     username: 'emi_khatana',
     offline: true,
-    skipPing: false
+    skipPing: true
   });
 
   client.on('spawn', () => {
-    console.log("SUCCESS: emi_khatana fully connected to world!");
+    console.log(`SUCCESS: Connected to world as '${client.username}'!`);
   });
 
-  // Dedicated Safe Chat Listener
   client.on('text', async (packet) => {
     try {
-      // System left/join messages ignore કરવા
+      // Ignore system translation messages (join/left/death)
       if (packet.needs_translation || packet.type === 'translation') return;
 
-      const sender = packet.source_name;
-      const message = packet.message;
+      const sender = packet.source_name || (packet.parameters ? packet.parameters[0] : '');
+      const message = packet.message || (packet.parameters ? packet.parameters[1] : '');
 
-      // Filter self messages & system bots
-      if (!sender || sender.includes('emi_khatana') || sender === 'Server') return;
+      // Dynamic Username filter (સર્વરે જે નામ આપ્યું હોય એ પકડશે)
+      if (!sender || sender === client.username || sender.includes('emi_khatana') || sender === 'Server') return;
 
       console.log(`[REAL CHAT] ${sender}: ${message}`);
 
@@ -60,17 +59,14 @@ function startBot() {
 
       if (!cleanReply) return;
 
-      console.log(`[BOT REPLYING]: ${cleanReply}`);
+      console.log(`[SENDING REPLY]: ${cleanReply}`);
 
-      // Safe Text Packet Format (No command_request to prevent Kick)
-      client.queue('text', {
-        type: 'chat',
-        needs_translation: false,
-        source_name: client.username,
-        xuid: '',
-        platform_chat_id: '',
-        filtered_message: '',
-        message: cleanReply
+      // Always works if Bot has OP in Aternos
+      client.queue('command_request', {
+        command: `/say ${cleanReply}`,
+        origin: { type: 0, uuid: '', request_id: '', player_entity_id: 0n },
+        internal: false,
+        version: 66
       });
 
     } catch (err) {
@@ -80,8 +76,8 @@ function startBot() {
 
   client.on('error', (err) => console.log("Bot Network Error:", err.message));
   client.on('close', () => {
-    console.log("Connection closed. Reconnecting in 12s...");
-    setTimeout(startBot, 12000);
+    console.log("Connection closed. Reconnecting in 10s...");
+    setTimeout(startBot, 10000);
   });
 }
 
