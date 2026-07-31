@@ -1,31 +1,29 @@
 const bedrock = require('bedrock-protocol');
 
-function createMinecraftBot(host, port, username) {
-  console.log(`[START] Trying to join ${host}:${port} as ${username}...`);
+// Direct auto-connect function
+function startBot() {
+  console.log("Connecting bot to Aternos...");
 
   const client = bedrock.createClient({
-    host: host || 'Poboi6-wLtc.aternos.me',
-    port: parseInt(port) || 55978,
-    username: username || 'emi_khatana',
+    host: 'Poboi6-wLtc.aternos.me',
+    port: 55978,
+    username: 'emi_khatana',
     offline: true,
-    // Tamaro Aternos Minecraft Bedrock Version (e.g. '1.21.0' કે '1.20.80')
-    version: '1.21.0', 
     skipPing: true
   });
 
   client.on('spawn', () => {
-    console.log(`[SUCCESS] Bot ${username} is inside the world!`);
+    console.log("SUCCESS: emi_khatana server ma join thai gayo!");
   });
 
   client.on('error', (err) => {
-    console.log(`[ERROR] Connection failed:`, err.message);
+    console.log("Bot Error:", err.message);
   });
 
-  client.on('close', (reason) => {
-    console.log(`[DISCONNECT] Reason:`, reason);
+  client.on('close', () => {
+    console.log("Connection closed. Reconnecting in 10s...");
+    setTimeout(startBot, 10000); // 10 second ma automatic reconnect thase
   });
-
-  return client;
 }
 
-module.exports = { createMinecraftBot };
+startBot();
