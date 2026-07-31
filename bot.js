@@ -3,11 +3,11 @@ const Groq = require('groq-sdk');
 
 const groq = process.env.GROQ_API_KEY ? new Groq({ apiKey: process.env.GROQ_API_KEY }) : null;
 
-const SYSTEM_PROMPT = `You are 'emi_khatana', a cute AI inside Minecraft. Respond in short Gujlish (Roman Gujarati + English, max 8 words). No symbols. Example: "Arey ha brother hu maja ma chu!"`;
+const SYSTEM_PROMPT = `You are 'emi_khatana', a cute AI child inside Minecraft Bedrock. Speak short (max 8 words) in natural Gujlish (Roman Gujarati + English). No special symbols. Example: "Arey ha brother hu ahi chu!"`;
 
 async function getAIReply(userMessage, sender) {
   try {
-    if (!groq) return "Ha hu ahi chu!";
+    if (!groq) return "Ha hu ahi j chu!";
 
     const res = await groq.chat.completions.create({
       messages: [
@@ -27,63 +27,61 @@ async function getAIReply(userMessage, sender) {
 }
 
 function startBot() {
-  console.log("Connecting emi_khatana (Universal Chat Protocol)...");
+  console.log("Starting Safe-Protocol Bot emi_khatana...");
 
   const client = bedrock.createClient({
     host: 'Poboi6-wLtc.aternos.me',
     port: 55978,
     username: 'emi_khatana',
     offline: true,
-    skipPing: true
+    skipPing: false
   });
 
   client.on('spawn', () => {
-    console.log("SUCCESS: emi_khatana spawned successfully!");
+    console.log("SUCCESS: emi_khatana fully connected to world!");
   });
 
-  // Universal Packet Sniffer (Catching all message types)
-  client.on('packet', async (deserialized) => {
+  // Dedicated Safe Chat Listener
+  client.on('text', async (packet) => {
     try {
-      const name = deserialized.data?.name;
+      // System left/join messages ignore કરવા
+      if (packet.needs_translation || packet.type === 'translation') return;
 
-      if (name === 'text') {
-        const p = deserialized.data.params;
-        console.log("[PACKET DETECTED]:", JSON.stringify(p));
+      const sender = packet.source_name;
+      const message = packet.message;
 
-        let sender = p.source_name || (p.parameters ? p.parameters[0] : '');
-        let message = p.message || (p.parameters ? p.parameters[1] : '');
+      // Filter self messages & system bots
+      if (!sender || sender.includes('emi_khatana') || sender === 'Server') return;
 
-        // If message is in raw format
-        if (!message && p.message) message = p.message;
+      console.log(`[REAL CHAT] ${sender}: ${message}`);
 
-        if (!message || sender.includes('emi_khatana') || sender.includes('Server')) return;
+      const aiReply = await getAIReply(message, sender);
+      const cleanReply = String(aiReply).replace(/[^a-zA-Z0-9 ]/g, '').trim();
 
-        console.log(`[USER CHAT]: ${sender} -> ${message}`);
+      if (!cleanReply) return;
 
-        const aiReply = await getAIReply(message, sender);
-        const cleanReply = String(aiReply).replace(/[^a-zA-Z0-9 ]/g, '').trim();
+      console.log(`[BOT REPLYING]: ${cleanReply}`);
 
-        if (!cleanReply) return;
+      // Safe Text Packet Format (No command_request to prevent Kick)
+      client.queue('text', {
+        type: 'chat',
+        needs_translation: false,
+        source_name: client.username,
+        xuid: '',
+        platform_chat_id: '',
+        filtered_message: '',
+        message: cleanReply
+      });
 
-        console.log(`[BOT REPLYING]: ${cleanReply}`);
-
-        // Send response back using command_request
-        client.queue('command_request', {
-          command: `/say ${cleanReply}`,
-          origin: { type: 0, uuid: '', request_id: '', player_entity_id: 0n },
-          internal: false,
-          version: 66
-        });
-      }
     } catch (err) {
-      console.log("Packet Read Error:", err.message);
+      console.log("Chat Process Error:", err.message);
     }
   });
 
-  client.on('error', (err) => console.log("Bot Error:", err.message));
+  client.on('error', (err) => console.log("Bot Network Error:", err.message));
   client.on('close', () => {
-    console.log("Disconnected. Reconnecting in 10s...");
-    setTimeout(startBot, 10000);
+    console.log("Connection closed. Reconnecting in 12s...");
+    setTimeout(startBot, 12000);
   });
 }
 
