@@ -8,36 +8,34 @@ let botState = {
   mood: 'Happy'
 };
 
-const SYSTEM_PROMPT = `
-You are 'emi_khatana', a cute girl in your world.
-Core instructions:
-1. Speak exclusively in natural Gujlish (Roman script Gujarati + English).
-2. Keep responses very short (maximum 8 to 10 words).
-3. Do not use special characters or emojis.
-4. Example: "Arey ha bhai, hu ahi j chu!", "Su chale chhe bro?", "Hu maja ma chu!".
-`;
+const SYSTEM_PROMPT = `You are 'emi_khatana', a cute AI child inside Minecraft. Speak short (max 8 words) in Gujlish (Roman Gujarati + English). No special characters.`;
 
 async function getLlamaResponse(userMessage, sender) {
   try {
+    if (!process.env.GROQ_API_KEY) {
+      console.log("Warning: GROQ_API_KEY not found in environment!");
+      return "Ha hu sambhlu chu!";
+    }
+
     const chatCompletion = await groq.chat.completions.create({
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: `${sender} says: "${userMessage}"` }
+        { role: 'user', content: `${sender}: ${userMessage}` }
       ],
       model: 'llama-3.1-8b-instant',
-      max_tokens: 40,
+      max_tokens: 30,
       temperature: 0.7,
     });
 
-    return chatCompletion.choices[0]?.message?.content || "Ha hu ahi j chu!";
+    return chatCompletion.choices[0]?.message?.content || "Arey ha bro!";
   } catch (error) {
     console.error("Llama AI Error:", error.message);
-    return "Kem cho brother!";
+    return "Ha, kem cho bro!";
   }
 }
 
 function startBot() {
-  console.log("Connecting emi_khatana (Crash-Proof Llama 3) to Aternos...");
+  console.log("Starting emi_khatana AI Bot...");
 
   const client = bedrock.createClient({
     host: 'Poboi6-wLtc.aternos.me',
@@ -48,27 +46,30 @@ function startBot() {
   });
 
   client.on('spawn', () => {
-    console.log("SUCCESS: emi_khatana joined and ready to chat!");
+    console.log("SUCCESS: emi_khatana connected!");
   });
 
-  // Safe Chat Event
   client.on('text', async (packet) => {
     try {
-      // Type 1 & 7 are player messages in bedrock-protocol
+      // Ignore self messages & system messages without source
       const sender = packet.source_name;
       const message = packet.message;
 
-      if (!sender || sender === botState.name) return;
+      if (!sender || sender === client.username || sender === 'emi_khatana') return;
 
       console.log(`[CHAT] ${sender}: ${message}`);
 
-      const aiReply = await getLlamaResponse(message, sender);
+      // Get AI Reply
+      const rawReply = await getLlamaResponse(message, sender);
       
-      // Clean string to prevent protocol errors
-      const cleanReply = aiReply.replace(/[\r\n"']/g, '').trim();
-      console.log(`[AI REPLY]: ${cleanReply}`);
+      // Sanitize output for Bedrock packet safety
+      const cleanReply = String(rawReply).replace(/[^a-zA-Z0-9 ?!,.]/g, '').trim();
 
-      // Safe Chat Packet
+      if (!cleanReply) return;
+
+      console.log(`[REPLY] ${cleanReply}`);
+
+      // Send text safely
       client.queue('text', {
         type: 'chat',
         needs_translation: false,
@@ -79,14 +80,14 @@ function startBot() {
         message: cleanReply
       });
     } catch (err) {
-      console.log("Chat Process Error:", err.message);
+      console.log("Ignored packet crash:", err.message);
     }
   });
 
-  client.on('error', (err) => console.log("Bot Error:", err.message));
+  client.on('error', (err) => console.log("Bot Network Error:", err.message));
   client.on('close', () => {
-    console.log("Connection closed. Reconnecting in 10s...");
-    setTimeout(startBot, 10000);
+    console.log("Reconnecting in 8s...");
+    setTimeout(startBot, 8000);
   });
 }
 
