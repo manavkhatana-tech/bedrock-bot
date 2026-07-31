@@ -3,7 +3,7 @@ const Groq = require('groq-sdk');
 
 const groq = process.env.GROQ_API_KEY ? new Groq({ apiKey: process.env.GROQ_API_KEY }) : null;
 
-const SYSTEM_PROMPT = `You are 'emi_khatana', a cute AI child inside Minecraft Bedrock. Speak short (max 8 words) in natural Gujlish (Roman Gujarati + English). No special symbols. Example: "Arey ha brother hu ahi chu!"`;
+const SYSTEM_PROMPT = `You are 'emi_khatana', a cute AI child in Minecraft Bedrock. Speak short (max 8 words) in natural Gujlish (Roman Gujarati + English). Do not use special symbols. Example: "Arey ha brother hu ahi chu"`;
 
 async function getAIReply(userMessage, sender) {
   try {
@@ -19,15 +19,15 @@ async function getAIReply(userMessage, sender) {
       temperature: 0.7,
     });
 
-    return res.choices[0]?.message?.content || "Ha kem cho bro!";
+    return res.choices[0]?.message?.content || "Ha kem cho!";
   } catch (err) {
-    console.error("Groq Error:", err.message);
-    return "Ha brother!";
+    console.error("Groq AI Error:", err.message);
+    return "Arey ha brother!";
   }
 }
 
 function startBot() {
-  console.log("Starting emi_khatana Dynamic Bot...");
+  console.log("Starting Stable emi_khatana Bot...");
 
   const client = bedrock.createClient({
     host: 'Poboi6-wLtc.aternos.me',
@@ -38,39 +38,45 @@ function startBot() {
   });
 
   client.on('spawn', () => {
-    console.log(`SUCCESS: Connected to world as '${client.username}'!`);
+    console.log("SUCCESS: emi_khatana fully connected!");
   });
 
+  // Dedicated Chat Event
   client.on('text', async (packet) => {
     try {
-      // Ignore system translation messages (join/left/death)
+      // Ignore system join/left messages
       if (packet.needs_translation || packet.type === 'translation') return;
 
       const sender = packet.source_name || (packet.parameters ? packet.parameters[0] : '');
       const message = packet.message || (packet.parameters ? packet.parameters[1] : '');
 
-      // Dynamic Username filter (સર્વરે જે નામ આપ્યું હોય એ પકડશે)
-      if (!sender || sender === client.username || sender.includes('emi_khatana') || sender === 'Server') return;
+      // Ignore self and server messages
+      if (!sender || sender.includes('emi_khatana') || sender === 'Server') return;
 
-      console.log(`[REAL CHAT] ${sender}: ${message}`);
+      console.log(`[USER CHAT DETECTED] ${sender}: ${message}`);
 
       const aiReply = await getAIReply(message, sender);
+      
+      // Clean special characters to prevent packet crash
       const cleanReply = String(aiReply).replace(/[^a-zA-Z0-9 ]/g, '').trim();
 
       if (!cleanReply) return;
 
       console.log(`[SENDING REPLY]: ${cleanReply}`);
 
-      // Always works if Bot has OP in Aternos
-      client.queue('command_request', {
-        command: `/say ${cleanReply}`,
-        origin: { type: 0, uuid: '', request_id: '', player_entity_id: 0n },
-        internal: false,
-        version: 66
+      // Native Text Packet (Server disconnected kick nai kare)
+      client.queue('text', {
+        type: 'chat',
+        needs_translation: false,
+        source_name: client.username,
+        xuid: '',
+        platform_chat_id: '',
+        filtered_message: '',
+        message: cleanReply
       });
 
     } catch (err) {
-      console.log("Chat Process Error:", err.message);
+      console.log("Text Event Error:", err.message);
     }
   });
 
