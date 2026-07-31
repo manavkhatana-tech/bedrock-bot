@@ -1,13 +1,11 @@
 {
   "name": "bedrock-bot",
   "version": "1.0.0",
-  "main": "server.js",
+  "main": "bot.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node bot.js"
   },
   "dependencies": {
-    "express": "^4.19.2",
-    "bedrock-protocol": "^3.40.0",
-    "prismarine-auth": "^2.7.0"
+    "bedrock-protocol": "^3.40.0"
   }
 }
