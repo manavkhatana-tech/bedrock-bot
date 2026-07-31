@@ -3,26 +3,7 @@ const Groq = require('groq-sdk');
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-// Bot Position & State Management
-let botState = {
-  name: 'emi_khatana',
-  mood: 'Happy', // Happy, Scared, Hurt, Angry
-  health: 20,
-  pos: { x: 0, y: 0, z: 0, yaw: 0, pitch: 0 },
-  targetPlayerPos: null,
-  targetPlayerName: null,
-  isGrounded: true
-};
-
-const SYSTEM_PROMPT = `
-You are 'emi_khatana', a cute AI child in Minecraft Bedrock.
-Current Mood: ${botState.mood}
-Instructions:
-1. Speak exclusively in short Gujlish (Roman Gujarati + English, max 8 words).
-2. React according to your mood (e.g., if hurt/scared, scream or cry in Gujlish).
-3. Do not use special symbols.
-Example: "Arey marna mat bro!", "Hu mari gayo!", "Ha hu tari pachal chu!"
-`;
+const SYSTEM_PROMPT = `You are 'emi_khatana', a cute AI child in Minecraft. Speak short (max 8 words) in natural Gujlish (Roman Gujarati + English). Do not use special symbols. Example: "Arey ha brother hu ahi chu"`;
 
 async function getLlamaResponse(userMessage, sender) {
   try {
@@ -46,7 +27,7 @@ async function getLlamaResponse(userMessage, sender) {
 }
 
 function startBot() {
-  console.log("Starting emi_khatana AI Bot with Physics & Follow System...");
+  console.log("Starting emi_khatana Bot...");
 
   const client = bedrock.createClient({
     host: 'Poboi6-wLtc.aternos.me',
@@ -57,78 +38,10 @@ function startBot() {
   });
 
   client.on('spawn', () => {
-    console.log("SUCCESS: emi_khatana spawned in world!");
-    
-    // Physics Loop (Gravity & Follow Player every 100ms)
-    setInterval(() => {
-      if (!botState.targetPlayerPos) return;
-
-      let dx = botState.targetPlayerPos.x - botState.pos.x;
-      let dz = botState.targetPlayerPos.z - botState.pos.z;
-      let distance = Math.sqrt(dx * dx + dz * dz);
-
-      // 1. Gravity Logic (જમીન પર રહેવું)
-      if (!botState.isGrounded) {
-        botState.pos.y -= 0.2; // Move down
-      }
-
-      // 2. Follow Player Logic (જો પ્લેયર 2 બ્લોકથી દૂર હોય તો જ ચાલવું)
-      if (distance > 2.5) {
-        let speed = 0.15;
-        botState.pos.x += (dx / distance) * speed;
-        botState.pos.z += (dz / distance) * speed;
-
-        // Calculate Yaw Angle to look at player
-        botState.pos.yaw = (Math.atan2(dz, dx) * (180 / Math.PI)) - 90;
-      }
-
-      // Send Position Update Packet to Server
-      client.queue('player_auth_input', {
-        pitch: botState.pos.pitch,
-        yaw: botState.pos.yaw,
-        position: { x: botState.pos.x, y: botState.pos.y, z: botState.pos.z },
-        move_vector: { x: 0, z: 0 },
-        head_yaw: botState.pos.yaw,
-        input_data: 0n,
-        input_mode: 'mouse',
-        play_mode: 'normal',
-        interaction_model: 'touch'
-      });
-    }, 100);
+    console.log("SUCCESS: emi_khatana joined!");
   });
 
-  // Player Position Update Listener (તમારી પોઝિશન ટ્રેક કરવા માટે)
-  client.on('move_player', (packet) => {
-    if (packet.runtime_entity_id !== client.entityId) {
-      botState.targetPlayerPos = packet.position;
-    } else {
-      botState.pos = packet.position;
-      botState.isGrounded = packet.on_ground;
-    }
-  });
-
-  // Health / Hit / Hurt Logic (જ્યારે બોટને ડેમેજ થાય)
-  client.on('entity_event', (packet) => {
-    if (packet.runtime_entity_id === client.entityId && packet.event_id === 'hurt') {
-      botState.health -= 2;
-      botState.mood = 'Scared';
-      
-      console.log(`[EVENT] Bot was hurt! Health: ${botState.health}`);
-
-      // Auto react in chat when hurt
-      client.queue('text', {
-        type: 'chat',
-        needs_translation: false,
-        source_name: client.username,
-        xuid: '',
-        platform_chat_id: '',
-        filtered_message: '',
-        message: "Auchi! Marna mat bhai mane bijaye chhe!"
-      });
-    }
-  });
-
-  // Safe Text Chat Handler
+  // Chat Handling (Crash Safe)
   client.on('text', async (packet) => {
     try {
       const sender = packet.source_name;
@@ -143,25 +56,25 @@ function startBot() {
 
       if (!cleanReply) return;
 
-      client.queue('text', {
-        type: 'chat',
-        needs_translation: false,
-        source_name: client.username,
-        xuid: '',
-        platform_chat_id: '',
-        filtered_message: '',
-        message: cleanReply
+      console.log(`[REPLY] ${cleanReply}`);
+
+      // Command Request Method (Most stable for Aternos)
+      client.queue('command_request', {
+        command: `/me ${cleanReply}`,
+        origin: { type: 0, uuid: '', request_id: '', player_entity_id: 0n },
+        internal: false,
+        version: 66
       });
 
     } catch (err) {
-      console.log("Packet Process Error:", err.message);
+      console.log("Text Event Error:", err.message);
     }
   });
 
   client.on('error', (err) => console.log("Bot Error:", err.message));
   client.on('close', () => {
-    console.log("Connection closed. Reconnecting in 10s...");
-    setTimeout(startBot, 10000);
+    console.log("Disconnected! Reconnecting in 15 seconds...");
+    setTimeout(startBot, 15000); // 15 seconds delay to prevent duplicate connection spam
   });
 }
 
