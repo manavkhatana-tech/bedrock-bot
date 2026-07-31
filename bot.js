@@ -8,12 +8,39 @@ let botState = {
   mood: 'Happy'
 };
 
-const SYSTEM_PROMPT = `You are 'emi_khatana', a cute AI child inside Minecraft. Speak short (max 8 words) in Gujlish (Roman Gujarati + English). No special characters.`;
+const SYSTEM_PROMPT = `You are 'emi_khatana', a cute AI child in Minecraft. Speak short (max 8 words) in natural Gujlish (Roman Gujarati + English). Do not use quotes or special symbols. Example: "Arey ha brother hu ahi chu"`;
+
+// --- CUSTOM WORLD / CHAT SEND MESSAGE FUNCTION ---
+function sendMessage(client, messageText) {
+  try {
+    // Special characters કે ન્યુ-લાઇન્સ સાફ કરવી જેથી સર્વર ક્રેશ ના થાય
+    const cleanText = String(messageText).replace(/[^a-zA-Z0-9 ]/g, '').trim();
+
+    if (!cleanText) return;
+
+    // Command request મારફતે સુરક્ષિત ચેટ મેસેજ મોકલવો
+    client.queue('command_request', {
+      command: `/me ${cleanText}`,
+      origin: {
+        type: 0,
+        uuid: '',
+        request_id: '',
+        player_entity_id: 0n
+      },
+      internal: false,
+      version: 66
+    });
+
+    console.log(`[SENT TO WORLD]: ${cleanText}`);
+  } catch (err) {
+    console.error("SendMessage Error:", err.message);
+  }
+}
 
 async function getLlamaResponse(userMessage, sender) {
   try {
     if (!process.env.GROQ_API_KEY) {
-      console.log("Warning: GROQ_API_KEY not found in environment!");
+      console.log("Warning: GROQ_API_KEY missing!");
       return "Ha hu sambhlu chu!";
     }
 
@@ -27,10 +54,10 @@ async function getLlamaResponse(userMessage, sender) {
       temperature: 0.7,
     });
 
-    return chatCompletion.choices[0]?.message?.content || "Arey ha bro!";
+    return chatCompletion.choices[0]?.message?.content || "Ha kem cho!";
   } catch (error) {
     console.error("Llama AI Error:", error.message);
-    return "Ha, kem cho bro!";
+    return "Arey ha brother!";
   }
 }
 
@@ -46,48 +73,38 @@ function startBot() {
   });
 
   client.on('spawn', () => {
-    console.log("SUCCESS: emi_khatana connected!");
+    console.log("SUCCESS: emi_khatana joined the world!");
+    
+    // પ્લેયર જોઈન થાય ત્યારે સ્વાગતનો મેસેજ
+    sendMessage(client, "Hello world hu emi chu");
   });
 
+  // Chat Event Listener
   client.on('text', async (packet) => {
     try {
-      // Ignore self messages & system messages without source
       const sender = packet.source_name;
       const message = packet.message;
 
+      // પોતે જ મોકલેલા કે સિસ્ટમ મેસેજ ઇગ્નોર કરવા
       if (!sender || sender === client.username || sender === 'emi_khatana') return;
 
-      console.log(`[CHAT] ${sender}: ${message}`);
+      console.log(`[WORLD CHAT] ${sender}: ${message}`);
 
-      // Get AI Reply
-      const rawReply = await getLlamaResponse(message, sender);
-      
-      // Sanitize output for Bedrock packet safety
-      const cleanReply = String(rawReply).replace(/[^a-zA-Z0-9 ?!,.]/g, '').trim();
+      // Llama 3 AI મોડેલ પાસેથી રિસ્પોન્સ લેવો
+      const aiResponse = await getLlamaResponse(message, sender);
 
-      if (!cleanReply) return;
+      // પ્લેયરને રિસ્પોન્સ મોકલવા માટે આપણું sendMessage ફંક્શન
+      sendMessage(client, aiResponse);
 
-      console.log(`[REPLY] ${cleanReply}`);
-
-      // Send text safely
-      client.queue('text', {
-        type: 'chat',
-        needs_translation: false,
-        source_name: client.username,
-        xuid: '',
-        platform_chat_id: '',
-        filtered_message: '',
-        message: cleanReply
-      });
     } catch (err) {
-      console.log("Ignored packet crash:", err.message);
+      console.log("Chat Handle Error:", err.message);
     }
   });
 
   client.on('error', (err) => console.log("Bot Network Error:", err.message));
   client.on('close', () => {
-    console.log("Reconnecting in 8s...");
-    setTimeout(startBot, 8000);
+    console.log("Connection closed. Reconnecting in 10s...");
+    setTimeout(startBot, 10000);
   });
 }
 
